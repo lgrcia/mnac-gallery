@@ -1,4 +1,5 @@
 <script>
+	import { onMount } from 'svelte';
 	import data from '$lib/assets/all_metadata.json';
 
 	const imageModules = import.meta.glob(
@@ -25,17 +26,15 @@
 
 	$: imageFilter = `grayscale(${grayscale ? 1 : 0}) contrast(${contrast}%)`;
 
-	// Load favorites from the separate favorites file
-	async function loadFavorites() {
+	// Load favorites from localStorage
+	function loadFavorites() {
 		try {
-			const response = await fetch('/api/favorites');
-			if (response.ok) {
-				const favoritesData = await response.json();
+			const stored = localStorage.getItem('favorites');
+			if (stored) {
+				const favoritesData = JSON.parse(stored);
 				favorites = new Set(
 					Object.keys(favoritesData)
-						.map((key) => {
-							return imagePaths.find((path) => getImageKey(path) === key);
-						})
+						.map((key) => imagePaths.find((path) => getImageKey(path) === key))
 						.filter(Boolean)
 				);
 			}
@@ -44,10 +43,12 @@
 		}
 	}
 
-	// Load favorites on mount
-	loadFavorites();
+	// Load favorites on mount (browser only)
+	onMount(() => {
+		loadFavorites();
+	});
 
-	async function toggleFavorite(path, event) {
+	function toggleFavorite(path, event) {
 		event?.preventDefault();
 		event?.stopPropagation();
 
@@ -61,24 +62,16 @@
 		}
 		favorites = favorites;
 
-		// Save to server
+		// Save to localStorage
 		try {
-			const response = await fetch('/api/favorites', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ imageKey, isFavorite })
-			});
-
-			if (!response.ok) {
-				console.error('Failed to save favorite');
-				// Revert on error
-				if (isFavorite) {
-					favorites.delete(path);
-				} else {
-					favorites.add(path);
-				}
-				favorites = favorites;
+			const stored = localStorage.getItem('favorites');
+			const favoritesData = stored ? JSON.parse(stored) : {};
+			if (isFavorite) {
+				favoritesData[imageKey] = true;
+			} else {
+				delete favoritesData[imageKey];
 			}
+			localStorage.setItem('favorites', JSON.stringify(favoritesData));
 		} catch (error) {
 			console.error('Error saving favorite:', error);
 			// Revert on error
